@@ -29,16 +29,16 @@ jobs:
             echo "updated=false" >> $GITHUB_ENV
           fi
 
-- name: Send Grouped Links to Discord
+      - name: Send Grouped Links to Discord
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
           REPO_BASE_URL: "https://github.com/${{ github.repository }}/blob/master"
         run: |
-          # استخراج فایل‌ها و مرتب‌سازی حروف الفبا برای حفظ ترتیب
+          # استخراج فایل‌ها (فقط IPv4)
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             FILES=$(find CIDR/ -name "*-ipv4-*" | grep -v "ipv6" | sort)
           elif [[ "$updated" == "true" ]]; then
-            FILES=$(git diff --name-only HEAD@{1} HEAD | grep "CIDR/" | grep "ipv4" | grep -v "ipv6" | sort || true)
+            FILES=$(git diff --name-only HEAD@{1} HEAD | grep "CIDR/" | grep "ipv4" | grep -v "ipv6" || true)
           else
             echo "تغییر جدیدی یافت نشد."
             exit 0
@@ -49,32 +49,19 @@ jobs:
             exit 0
           fi
 
-          # دیتابیس وضعیت‌های نظامی/فنی
-          MILITARY_STATUS=(
-            "📡 Radar Scan: Completed. No threats detected."
-            "🛡️ Perimeter Secured: IP database synchronized."
-            "⚡ Targeting Systems: Calibrated and Ready."
-            "🦅 Air Reconnaissance: Data feed established."
-            "⚙️ V12 Engine: Peak performance maintained."
-            "📻 Encrypted Channel: Transmission successful."
-            "🌑 Stealth Mode: Operational."
-          )
-          RANDOM_STATUS=${MILITARY_STATUS[$RANDOM % ${#MILITARY_STATUS[@]}]}
-
-          MESSAGE="--- 🎖️ **INTELLIGENCE UPDATE** ---"$'\n'
+          MESSAGE=""
           COUNT=0
-          TOTAL=$(echo "$FILES" | wc -l)
-          CURRENT=0
 
           for FILE in $FILES; do
-            CURRENT=$((CURRENT + 1))
             FILE_NAME=$(basename "$FILE")
+            # استخراج کد دو رقمی کشور (مثلا TH یا IR)
             CODE=$(echo $FILE_NAME | cut -d'-' -f1 | tr '[:lower:]' '[:upper:]')
             
-            # تبدیل کد کشور به ایموجی پرچم
+            # تبدیل کد کشور به ایموجی پرچم (Regional Indicator Symbols)
+            # این بخش کد هگز کد کشور را به ایموجی تبدیل می‌کند
             EMOJI=$(python3 -c "print(''.join(chr(127397 + ord(c)) for c in '$CODE'))" 2>/dev/null || echo "🌐")
 
-            # دیکشنری نام کشورها (کد ارسالی خودتان)
+            # نام کشورها - اضافه کردن موارد جامانده در تصویر شما
             case $CODE in
               TH) NAME="Thailand" ;; LC) NAME="Saint Lucia" ;; EE) NAME="Estonia" ;;
               MG) NAME="Madagascar" ;; TZ) NAME="Tanzania" ;; BN) NAME="Brunei" ;;
@@ -89,30 +76,30 @@ jobs:
               FJ) NAME="Fiji" ;; MM) NAME="Myanmar" ;; YT) NAME="Mayotte" ;;
               CR) NAME="Costa Rica" ;; BV) NAME="Bouvet Island" ;; BA) NAME="Bosnia" ;;
               IR) NAME="Iran" ;; US) NAME="USA" ;; DE) NAME="Germany" ;;
-              *) NAME="$CODE" ;;
+              *) NAME="$CODE" ;; # اگر در لیست نبود کد را نشان بده
             esac
 
             FULL_URL="${REPO_BASE_URL}/$FILE"
+            LINE="$EMOJI **$NAME**: <$FULL_URL>"
             
-            # ایجاد خط با لینک مخفی (Download) و حذف پیش‌نمایش با استفاده از < >
-            LINE="$EMOJI **$NAME**: [Download List](<$FULL_URL>)"
+            if [ -z "$MESSAGE" ]; then
+              MESSAGE="$LINE"
+            else
+              MESSAGE="$MESSAGE"$'\n'"$LINE"
+            fi
             
-            MESSAGE="${MESSAGE}${LINE}"$'\n'
             COUNT=$((COUNT + 1))
 
-            # ارسال در دسته‌های ۱۰ تایی برای پایداری بیشتر
-            if [ $COUNT -eq 10 ] || [ $CURRENT -eq $TOTAL ]; then
-              
-              # اضافه کردن وضعیت سیستم در انتهای هر پیام
-              MESSAGE="${MESSAGE}"$'\n'"**SYSTEM STATUS:** \`$RANDOM_STATUS\`"
-              MESSAGE="${MESSAGE}"$'\n'"------------------------------------"
-
+            # ارسال در دسته‌های 15 تایی
+            if [ $COUNT -eq 15 ]; then
               jq -n --arg msg "$MESSAGE" '{content: $msg}' | curl -X POST -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK"
-              
-              # بازنشانی پیام برای دسته بعدی
-              if [ $CURRENT -lt $TOTAL ]; then
-                MESSAGE="--- 🎖️ **CONTINUED REPORT** ---"$'\n'
-              fi
+              MESSAGE=""
               COUNT=0
-              sleep 1.5
+              sleep 1 # وقفه کوتاه برای جلوگیری از بلاک شدن توسط دیسکورد
             fi
+          done
+
+          # ارسال باقی‌مانده پیام‌ها
+          if [ $COUNT -gt 0 ]; then
+            jq -n --arg msg "$MESSAGE" '{content: $msg}' | curl -X POST -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK"
+          fi
