@@ -30,14 +30,16 @@ jobs:
             echo "updated=false" >> $GITHUB_ENV
           fi
 
-      - name: Send Grouped Links to Discord
+- name: Send Grouped Links to Discord
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
           REPO_BASE_URL: "https://github.com/${{ github.repository }}/blob/master"
         run: |
-          # پیدا کردن فایل‌ها و فیلتر کردن IPv6
+          # دانلود فایل نام کشورها برای تبدیل کد به نام کامل
+          curl -s https://raw.githubusercontent.com/umpirsky/country-list/master/data/fa/country.json -o countries.json
+
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            FILES=$(find . -name "*.txt" | grep "CIDR/" | grep -v "ipv6" | head -n 50)
+            FILES=$(find . -name "*.txt" | grep "CIDR/" | grep -v "ipv6" | head -n 100)
           elif [[ "$updated" == "true" ]]; then
             FILES=$(git diff --name-only HEAD@{1} HEAD | grep '\.txt$' | grep -v "ipv6" || true)
           else
@@ -49,29 +51,28 @@ jobs:
           COUNT=0
 
           for FILE in $FILES; do
-            CLEAN_PATH=$(echo $FILE | sed 's|./||')
             FILE_NAME=$(basename "$FILE")
+            # استخراج کد کشور (مثلا IR)
+            CODE=$(echo $FILE_NAME | cut -d'-' -f1 | tr '[:lower:]' '[:upper:]')
             
-            # استخراج کد کشور (مثلاً IR یا AE)
-            COUNTRY_CODE=$(echo $FILE_NAME | cut -d'-' -f1 | tr '[:lower:]' '[:upper:]')
+            # پیدا کردن نام فارسی کشور از فایل دانلود شده
+            COUNTRY_NAME=$(jq -r --arg code "$CODE" '.[$code] // $code' countries.json)
             
-            # دیکشنری نام کشورها (می‌توانید موارد بیشتری اضافه کنید)
-            case $COUNTRY_CODE in
-              IR) FULL_NAME="ایران 🇮🇷" ;;
-              AE) FULL_NAME="امارات 🇦🇪" ;;
-              DE) FULL_NAME="آلمان 🇩🇪" ;;
-              US) FULL_NAME="آمریکا 🇺🇸" ;;
-              TR) FULL_NAME="ترکیه 🇹🇷" ;;
-              GB) FULL_NAME="انگلیس 🇬🇧" ;;
-              *) FULL_NAME="$COUNTRY_CODE" ;;
-            esac
-
-            FULL_URL="${REPO_BASE_URL}/${CLEAN_PATH}"
-            LINE="🌐 **$FULL_NAME**: [مشاهده لیست]($FULL_URL)\n"
-            MESSAGE_BATCH="${MESSAGE_BATCH}${LINE}"
+            FULL_URL="${REPO_BASE_URL}/CIDR/${FILE_NAME}"
+            
+            # ساخت خط پیام (بدون استفاده از \n دستی در متن برای جلوگیری از باگ تصویر شما)
+            LINE="🌐 **$COUNTRY_NAME**: [مشاهده لیست]($FULL_URL)"
+            
+            if [ -z "$MESSAGE_BATCH" ]; then
+              MESSAGE_BATCH="$LINE"
+            else
+              MESSAGE_BATCH="$MESSAGE_BATCH
+$LINE"
+            fi
+            
             COUNT=$((COUNT + 1))
 
-            # هر ۱۰ لینک را در یک پیام بفرست
+            # ارسال در دسته‌های ۱۰ تایی
             if [ $COUNT -eq 10 ]; then
               PAYLOAD=$(jq -n --arg msg "$MESSAGE_BATCH" '{content: $msg}')
               curl -H "Content-Type: application/json" -d "$PAYLOAD" "$DISCORD_WEBHOOK"
@@ -81,7 +82,7 @@ jobs:
             fi
           done
 
-          # ارسال باقی‌مانده لینک‌ها
+          # ارسال باقی‌مانده
           if [ $COUNT -gt 0 ]; then
             PAYLOAD=$(jq -n --arg msg "$MESSAGE_BATCH" '{content: $msg}')
             curl -H "Content-Type: application/json" -d "$PAYLOAD" "$DISCORD_WEBHOOK"
