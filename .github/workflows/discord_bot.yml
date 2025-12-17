@@ -133,9 +133,9 @@ jobs:
           RANDOM_QUOTE=${FINAL_QUOTES[$RANDOM % ${#FINAL_QUOTES[@]}]}
 
           # ساخت پیام نهایی
-          FINAL_REPORT="🏁 **FINAL MISSION SUMMARY**"$'\n'
+          FINAL_REPORT="🏁 **IP RANGE FINDING MISSION SUMMARY**"$'\n'
           FINAL_REPORT+="━━━━━━━━━━━━━━━━━━━━"$'\n'
-          FINAL_REPORT+="📅 **Last Update (Iran):** \`$LAST_UPDATE\`"$'\n'
+          FINAL_REPORT+="📅 **Last Update (IRAN-TIME):** \`$LAST_UPDATE\`"$'\n'
           FINAL_REPORT+="🌍 **Total Countries in Database:** \`$COUNTRY_COUNT\`"$'\n'
           FINAL_REPORT+="🔢 **Total Active IP Ranges:** \`$TOTAL_IPS\`"$'\n'
           FINAL_REPORT+="📝 **Operation Status:** \`$RANDOM_QUOTE\`"$'\n'
