@@ -1,4 +1,4 @@
-name: Country IP Sync & Multi-Mode Discord
+name: Country IP Sync & Link Sender
 
 on:
   schedule:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  sync-and-send:
+  sync-and-link:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -31,15 +31,17 @@ jobs:
             echo "updated=false" >> $GITHUB_ENV
           fi
 
-      - name: Process and Send to Discord
+      - name: Send Links to Discord
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          # آدرس پایه برای لینک‌های گیت‌هاب شما
+          REPO_BASE_URL: "https://github.com/${{ github.repository }}/blob/master"
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "حالت دستی: ارسال ۵ فایل اول..."
-            FILES=$(find . -name "*.txt" | grep "CIDR/" | head -n 5)
+            echo "حالت دستی: ارسال ۲۰ فایل اول به صورت لینک..."
+            FILES=$(find . -name "*.txt" | grep "CIDR/" | head -n 20)
           elif [[ "$updated" == "true" ]]; then
-            echo "حالت خودکار: ارسال تغییرات جدید..."
+            echo "حالت خودکار: ارسال لینک فایل‌های تغییر کرده..."
             FILES=$(git diff --name-only HEAD@{1} HEAD | grep '\.txt$' || true)
           else
             echo "تغییر جدیدی یافت نشد."
@@ -48,19 +50,23 @@ jobs:
 
           for FILE in $FILES; do
             if [ -f "$FILE" ]; then
-              CLEAN_NAME=$(basename "$FILE")
-              # خواندن ۱۵ خط اول و آماده‌سازی امن برای JSON
-              CONTENT=$(head -n 15 "$FILE")
+              # تمیز کردن مسیر فایل برای ساخت لینک
+              CLEAN_PATH=$(echo $FILE | sed 's|./||')
+              FILE_NAME=$(basename "$FILE")
               
-              echo "در حال ارسال ایمن: $CLEAN_NAME"
+              # ساخت لینک مستقیم
+              FULL_URL="${REPO_BASE_URL}/${CLEAN_PATH}"
               
-              # استفاده از jq برای ساختن JSON استاندارد و جلوگیری از خطای 50109
-              PAYLOAD=$(jq -n --arg msg "📂 **فایل: $CLEAN_NAME**\n\`\`\`\n$CONTENT\n\`\`\`" '{content: $msg}')
+              echo "ارسال لینک: $FILE_NAME"
+              
+              # ارسال به دیسکورد به صورت مارک‌داون (نام فایل کلیک‌شدنی)
+              PAYLOAD=$(jq -n --arg name "$FILE_NAME" --arg url "$FULL_URL" \
+                '{content: "🌐 **لیست آی‌پی کشور: [\($name)](\($url))**\nبرای مشاهده لیست کامل روی نام کشور کلیک کنید."}')
               
               curl -H "Content-Type: application/json" \
                    -d "$PAYLOAD" \
                    "$DISCORD_WEBHOOK"
               
-              sleep 1
+              sleep 0.5
             fi
           done
