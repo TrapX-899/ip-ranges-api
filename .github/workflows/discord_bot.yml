@@ -2,8 +2,8 @@ name: Sync Country IP Ranges to Discord
 
 on:
   schedule:
-    - cron: '0 * * * *' # اجرای خودکار سر هر ساعت
-  workflow_dispatch: # امکان اجرای دستی برای تست
+    - cron: '0 * * * *'
+  workflow_dispatch:
 
 jobs:
   update-and-notify:
@@ -18,14 +18,19 @@ jobs:
 
       - name: Sync with ebrasha/cidr-ip-ranges
         run: |
+          # تنظیم هویت برای گیت (اجباری برای انجام عملیات Merge)
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
+          
           git remote add upstream https://github.com/ebrasha/cidr-ip-ranges-by-country.git
           git fetch upstream
-          git checkout main
           
-          # بررسی اینکه آیا تغییر جدیدی در پروژه اصلی وجود دارد یا خیر
-          if git merge upstream/main --ff-only; then
+          # تغییر نام از main به master بر اساس ریپازیتوری شما
+          git checkout master
+          
+          if git merge upstream/master --ff-only; then
             echo "sync_status=updated" >> $GITHUB_ENV
-            git push origin main
+            git push origin master
           else
             echo "sync_status=no_change" >> $GITHUB_ENV
           fi
@@ -35,23 +40,21 @@ jobs:
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         run: |
-          # پیدا کردن لیست فایل‌های متنی که در آخرین سینک تغییر کرده‌اند
-          # این دستور فقط فایل‌هایی که در پوشه iplists هستند را چک می‌کند
-          CHANGED_FILES=$(git diff --name-only HEAD@{1} HEAD | grep '\.txt$')
+          # مقایسه آخرین تغییرات
+          CHANGED_FILES=$(git diff --name-only HEAD@{1} HEAD | grep '\.txt$' || true)
           
           if [ -z "$CHANGED_FILES" ]; then
-            echo "تغییر محتوایی در فایل‌های txt وجود نداشت."
+            echo "تغییر محتوایی یافت نشد."
             exit 0
           fi
 
           for FILE in $CHANGED_FILES; do
-            # خواندن ۲۰ خط اول فایل برای جلوگیری از طولانی شدن پیام دیسکورد
-            CONTENT=$(head -n 20 "$FILE")
-            FILE_NAME=$(basename "$FILE")
-            
-            echo "ارسال آپدیت فایل: $FILE_NAME"
-            
-            curl -H "Content-Type: application/json" \
-                 -d "{\"content\": \"🚩 **تغییر در رنج آی‌پی: $FILE_NAME**\n\`\`\`\n$CONTENT\n\n... (ادامه در فایل اصلی)\n\`\`\`\"}" \
-                 $DISCORD_WEBHOOK
+            if [ -f "$FILE" ]; then
+              CONTENT=$(head -n 15 "$FILE")
+              FILE_NAME=$(basename "$FILE")
+              
+              curl -H "Content-Type: application/json" \
+                   -d "{\"content\": \"🚩 **تغییر در رنج آی‌پی: $FILE_NAME**\n\`\`\`\n$CONTENT\n\`\`\`\"}" \
+                   $DISCORD_WEBHOOK
+            fi
           done
