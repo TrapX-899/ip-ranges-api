@@ -1,4 +1,4 @@
-name: Country IP Sync & Optimized Discord Links
+name: Country IP Sync & Final Optimized Links
 
 on:
   schedule:
@@ -30,16 +30,15 @@ jobs:
             echo "updated=false" >> $GITHUB_ENV
           fi
 
-- name: Send Grouped Links to Discord
+      - name: Send Grouped Links to Discord
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
           REPO_BASE_URL: "https://github.com/${{ github.repository }}/blob/master"
         run: |
-          # دانلود فایل نام کشورها برای تبدیل کد به نام کامل
-          curl -s https://raw.githubusercontent.com/umpirsky/country-list/master/data/fa/country.json -o countries.json
-
+          # انتخاب فایل‌ها و حذف ipv6
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            FILES=$(find . -name "*.txt" | grep "CIDR/" | grep -v "ipv6" | head -n 100)
+            echo "حالت دستی فعال شد."
+            FILES=$(find . -name "*.txt" | grep "CIDR/" | grep -v "ipv6" | head -n 60)
           elif [[ "$updated" == "true" ]]; then
             FILES=$(git diff --name-only HEAD@{1} HEAD | grep '\.txt$' | grep -v "ipv6" || true)
           else
@@ -47,43 +46,42 @@ jobs:
             exit 0
           fi
 
-          MESSAGE_BATCH=""
+          if [ -z "$FILES" ]; then
+             echo "فایلی برای ارسال نیست."
+             exit 0
+          fi
+
+          MESSAGE=""
           COUNT=0
 
           for FILE in $FILES; do
             FILE_NAME=$(basename "$FILE")
-            # استخراج کد کشور (مثلا IR)
+            # استخراج کد کشور و تبدیل به حروف بزرگ
             CODE=$(echo $FILE_NAME | cut -d'-' -f1 | tr '[:lower:]' '[:upper:]')
-            
-            # پیدا کردن نام فارسی کشور از فایل دانلود شده
-            COUNTRY_NAME=$(jq -r --arg code "$CODE" '.[$code] // $code' countries.json)
             
             FULL_URL="${REPO_BASE_URL}/CIDR/${FILE_NAME}"
             
-            # ساخت خط پیام (بدون استفاده از \n دستی در متن برای جلوگیری از باگ تصویر شما)
-            LINE="🌐 **$COUNTRY_NAME**: [مشاهده لیست]($FULL_URL)"
+            # افزودن خط جدید به پیام
+            LINE="🌐 **کشور $CODE**: [مشاهده لیست آی‌پی]($FULL_URL)"
             
-            if [ -z "$MESSAGE_BATCH" ]; then
-              MESSAGE_BATCH="$LINE"
+            if [ -z "$MESSAGE" ]; then
+              MESSAGE="$LINE"
             else
-              MESSAGE_BATCH="$MESSAGE_BATCH
-$LINE"
+              MESSAGE="$MESSAGE"$'\n'"$LINE"
             fi
             
             COUNT=$((COUNT + 1))
 
-            # ارسال در دسته‌های ۱۰ تایی
+            # ارسال در دسته‌های ۱۰ تایی برای جلوگیری از سنگین شدن پیام
             if [ $COUNT -eq 10 ]; then
-              PAYLOAD=$(jq -n --arg msg "$MESSAGE_BATCH" '{content: $msg}')
-              curl -H "Content-Type: application/json" -d "$PAYLOAD" "$DISCORD_WEBHOOK"
-              MESSAGE_BATCH=""
+              jq -n --arg msg "$MESSAGE" '{content: $msg}' | curl -X POST -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK"
+              MESSAGE=""
               COUNT=0
               sleep 2
             fi
           done
 
-          # ارسال باقی‌مانده
+          # ارسال باقی‌مانده لینک‌ها
           if [ $COUNT -gt 0 ]; then
-            PAYLOAD=$(jq -n --arg msg "$MESSAGE_BATCH" '{content: $msg}')
-            curl -H "Content-Type: application/json" -d "$PAYLOAD" "$DISCORD_WEBHOOK"
+            jq -n --arg msg "$MESSAGE" '{content: $msg}' | curl -X POST -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK"
           fi
