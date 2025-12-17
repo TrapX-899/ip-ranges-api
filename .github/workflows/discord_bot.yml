@@ -104,7 +104,7 @@ jobs:
             jq -n --arg msg "$MESSAGE" '{content: $msg}' | curl -X POST -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK"
           fi
 
-- name: Send Final Status & Analytics
+      - name: Send Final Status & Analytics
         if: always() && env.updated == 'true'
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
