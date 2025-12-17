@@ -1,12 +1,12 @@
-name: Sync Country IP Ranges to Discord
+name: Country IP Sync & Multi-Mode Discord
 
 on:
   schedule:
-    - cron: '0 * * * *'
-  workflow_dispatch:
+    - cron: '0 * * * *' # اجرای خودکار سر هر ساعت
+  workflow_dispatch: # دکمه اجرای دستی
 
 jobs:
-  update-and-notify:
+  sync-and-send:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -16,45 +16,55 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Sync with ebrasha/cidr-ip-ranges
+      - name: Sync with Original Repository
         run: |
-          # تنظیم هویت برای گیت (اجباری برای انجام عملیات Merge)
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
-          
           git remote add upstream https://github.com/ebrasha/cidr-ip-ranges-by-country.git
           git fetch upstream
-          
-          # تغییر نام از main به master بر اساس ریپازیتوری شما
           git checkout master
           
           if git merge upstream/master --ff-only; then
-            echo "sync_status=updated" >> $GITHUB_ENV
+            echo "updated=true" >> $GITHUB_ENV
             git push origin master
           else
-            echo "sync_status=no_change" >> $GITHUB_ENV
+            echo "updated=false" >> $GITHUB_ENV
           fi
 
-      - name: Send Updates to Discord
-        if: env.sync_status == 'updated'
+      - name: Process and Send to Discord
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         run: |
-          # مقایسه آخرین تغییرات
-          CHANGED_FILES=$(git diff --name-only HEAD@{1} HEAD | grep '\.txt$' || true)
-          
-          if [ -z "$CHANGED_FILES" ]; then
-            echo "تغییر محتوایی یافت نشد."
+          # تشخیص نوع اجرا
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "حالت اجرای دستی: ارسال تمامی فایل‌ها..."
+            # پیدا کردن تمام فایل‌های txt (برای جلوگیری از اسپم سنگین، 10 فایل اول را می‌فرستد)
+            FILES=$(find . -name "*.txt" | head -n 10)
+          elif [[ "$updated" == "true" ]]; then
+            echo "حالت خودکار: ارسال تغییرات جدید..."
+            FILES=$(git diff --name-only HEAD@{1} HEAD | grep '\.txt$' || true)
+          else
+            echo "هیچ تغییر جدیدی یافت نشد و اجرا دستی نبود."
             exit 0
           fi
 
-          for FILE in $CHANGED_FILES; do
+          if [ -z "$FILES" ]; then
+            echo "فایلی برای ارسال پیدا نشد."
+            exit 0
+          fi
+
+          for FILE in $FILES; do
             if [ -f "$FILE" ]; then
               CONTENT=$(head -n 15 "$FILE")
               FILE_NAME=$(basename "$FILE")
               
+              echo "در حال ارسال: $FILE_NAME"
+              
               curl -H "Content-Type: application/json" \
-                   -d "{\"content\": \"🚩 **تغییر در رنج آی‌پی: $FILE_NAME**\n\`\`\`\n$CONTENT\n\`\`\`\"}" \
+                   -d "{\"content\": \"📂 **فایل: $FILE_NAME**\n\`\`\`\n$CONTENT\n\`\`\`\"}" \
                    $DISCORD_WEBHOOK
+              
+              # ایجاد وقفه کوتاه برای جلوگیری از Rate Limit دیسکورد
+              sleep 1
             fi
           done
