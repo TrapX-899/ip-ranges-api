@@ -1,4 +1,4 @@
-name: Country IP Sync & Final Clean Links
+name: Country IP Sync - Final Version
 
 on:
   schedule:
@@ -35,8 +35,11 @@ jobs:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
           REPO_BASE_URL: "https://github.com/${{ github.repository }}/blob/master"
         run: |
+          # دانلود دیتابیس نام و پرچم کشورها
+          curl -s https://raw.githubusercontent.com/stefangabos/world_countries/master/data/en/countries.json -o countries.json
+
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            FILES=$(find . -name "*.txt" | grep "CIDR/" | grep -v "ipv6" | head -n 80)
+            FILES=$(find . -name "*.txt" | grep "CIDR/" | grep -v "ipv6" | head -n 100)
           elif [[ "$updated" == "true" ]]; then
             FILES=$(git diff --name-only HEAD@{1} HEAD | grep '\.txt$' | grep -v "ipv6" || true)
           else
@@ -49,32 +52,19 @@ jobs:
 
           for FILE in $FILES; do
             FILE_NAME=$(basename "$FILE")
-            CODE=$(echo $FILE_NAME | cut -d'-' -f1 | tr '[:lower:]' '[:upper:]')
+            CODE=$(echo $FILE_NAME | cut -d'-' -f1 | tr '[:upper:]' '[:lower:]')
             
-            # دیکشنری نام کشورها (نسخه انگلیسی برای پوشش کامل)
-            case $CODE in
-              AF) NAME="Afghanistan" ;; AL) NAME="Albania" ;; DZ) NAME="Algeria" ;; AD) NAME="Andorra" ;; AO) NAME="Angola" ;;
-              AR) NAME="Argentina" ;; AM) NAME="Armenia" ;; AU) NAME="Australia" ;; AT) NAME="Austria" ;; AZ) NAME="Azerbaijan" ;;
-              BH) NAME="Bahrain" ;; BD) NAME="Bangladesh" ;; BY) NAME="Belarus" ;; BE) NAME="Belgium" ;; BR) NAME="Brazil" ;;
-              BG) NAME="Bulgaria" ;; CA) NAME="Canada" ;; CN) NAME="China" ;; CO) NAME="Colombia" ;; HR) NAME="Croatia" ;;
-              CU) NAME="Cuba" ;; CY) NAME="Cyprus" ;; CZ) NAME="Czech Republic" ;; DK) NAME="Denmark" ;; EG) NAME="Egypt" ;;
-              FI) NAME="Finland" ;; FR) NAME="France" ;; GE) NAME="Georgia" ;; DE) NAME="Germany" ;; GR) NAME="Greece" ;;
-              HK) NAME="Hong Kong" ;; HU) NAME="Hungary" ;; IS) NAME="Iceland" ;; IN) NAME="India" ;; ID) NAME="Indonesia" ;;
-              IR) NAME="Iran" ;; IQ) NAME="Iraq" ;; IE) NAME="Ireland" ;; IT) NAME="Italy" ;; JP) NAME="Japan" ;;
-              JO) NAME="Jordan" ;; KZ) NAME="Kazakhstan" ;; KW) NAME="Kuwait" ;; LB) NAME="Lebanon" ;; LY) NAME="Libya" ;;
-              MY) NAME="Malaysia" ;; MX) NAME="Mexico" ;; MC) NAME="Monaco" ;; MA) NAME="Morocco" ;; NL) NAME="Netherlands" ;;
-              NZ) NAME="New Zealand" ;; NO) NAME="Norway" ;; OM) NAME="Oman" ;; PK) NAME="Pakistan" ;; PS) NAME="Palestine" ;;
-              PH) NAME="Philippines" ;; PL) NAME="Poland" ;; PT) NAME="Portugal" ;; QA) NAME="Qatar" ;; RO) NAME="Romania" ;;
-              RU) NAME="Russia" ;; SA) NAME="Saudi Arabia" ;; SG) NAME="Singapore" ;; KR) NAME="South Korea" ;; ES) NAME="Spain" ;;
-              SE) NAME="Sweden" ;; CH) NAME="Switzerland" ;; SY) NAME="Syria" ;; TW) NAME="Taiwan" ;; TH) NAME="Thailand" ;;
-              TR) NAME="Turkey" ;; UA) NAME="Ukraine" ;; AE) NAME="United Arab Emirates" ;; GB) NAME="United Kingdom" ;; US) NAME="USA" ;;
-              VN) NAME="Vietnam" ;; YE) NAME="Yemen" ;; *) NAME="$CODE" ;;
-            esac
+            # استخراج نام و پرچم از فایل JSON
+            # از کد ۲ حرفی برای پیدا کردن نام و پرچم استفاده می‌کنیم
+            COUNTRY_DATA=$(jq -r --arg code "$CODE" '.[] | select(.alpha2 == $code) | "\(.emoji) \(.name)"' countries.json)
+            
+            # اگر کشور پیدا نشد، فقط کد را نشان بده
+            if [ -z "$COUNTRY_DATA" ]; then COUNTRY_DATA="🌐 Country: ${CODE^^}"; fi
 
             FULL_URL="${REPO_BASE_URL}/CIDR/${FILE_NAME}"
             
-            # قرار دادن لینک داخل <> برای حذف پیش‌نمایش (No Embed)
-            LINE="🌐 **$NAME**: <$FULL_URL>"
+            # ساخت خط پیام: نام و پرچم + لینک بدون پیش‌نمایش داخل <>
+            LINE="${COUNTRY_DATA}: <${FULL_URL}>"
             
             if [ -z "$MESSAGE" ]; then
               MESSAGE="$LINE"
@@ -84,8 +74,9 @@ jobs:
             
             COUNT=$((COUNT + 1))
 
+            # ارسال در دسته‌های ۱۰ تایی
             if [ $COUNT -eq 10 ]; then
-              jq -n --arg msg "$MESSAGE" '{content: $msg}' | curl -X POST -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK"
+              jq -n --arg msg "$MESSAGE" '{content: $msg}' | curl -s -X POST -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK"
               MESSAGE=""
               COUNT=0
               sleep 2
@@ -93,5 +84,5 @@ jobs:
           done
 
           if [ $COUNT -gt 0 ]; then
-            jq -n --arg msg "$MESSAGE" '{content: $msg}' | curl -X POST -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK"
+            jq -n --arg msg "$MESSAGE" '{content: $msg}' | curl -s -X POST -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK"
           fi
