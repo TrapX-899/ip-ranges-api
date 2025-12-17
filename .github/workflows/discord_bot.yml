@@ -10,8 +10,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+
     steps:
-      - name: Checkout Fork
+      - name: Checkout fork
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
@@ -25,37 +26,36 @@ jobs:
           git fetch upstream
           git checkout master
           if git merge upstream/master --ff-only; then
-            echo "updated=true" >> $GITHUB_ENV
+            echo "updated=true" >> "$GITHUB_ENV"
             git push origin master
           else
-            echo "updated=false" >> $GITHUB_ENV
+            echo "updated=false" >> "$GITHUB_ENV"
           fi
 
       - name: Send grouped links to Discord
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-          REPO_BASE_URL: "https://github.com/${{ github.repository }}/blob/master"
+          REPO_BASE_URL: https://github.com/${{ github.repository }}/blob/master
           EVENT_NAME: ${{ github.event_name }}
         run: |
           set -e
 
-          # انتخاب فایل‌ها: فقط IPv4 و داخل CIDR
+          # Pick files: only IPv4 inside CIDR
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
             FILES=$(find . -type f -name "*-ipv4-Hackers.Zone.txt" | grep "CIDR/" | sort | head -n 80)
-          elif [[ "$updated" == "true" ]]; then
+          elif [[ "${updated:-false}" == "true" ]]; then
             FILES=$(git diff --name-only HEAD@{1} HEAD | grep "CIDR/" | grep -E '\-ipv4\-Hackers\.Zone\.txt$' || true)
           else
             echo "No changes detected."
             exit 0
           fi
 
-          # اگر چیزی نبود، خارج شو
           if [[ -z "$FILES" ]]; then
             echo "No eligible IPv4 files found to send."
             exit 0
           fi
 
-          # دیکشنری نام کشورها (گسترده + fallback)
+          # Country names dictionary
           declare -A COUNTRY_NAMES=(
             [AF]="Afghanistan" [AL]="Albania" [DZ]="Algeria" [AD]="Andorra" [AO]="Angola" [AR]="Argentina" [AM]="Armenia"
             [AU]="Australia" [AT]="Austria" [AZ]="Azerbaijan" [BH]="Bahrain" [BD]="Bangladesh" [BY]="Belarus"
@@ -70,21 +70,21 @@ jobs:
             [SY]="Syria" [TW]="Taiwan" [TH]="Thailand" [TR]="Turkey" [UA]="Ukraine" [AE]="United Arab Emirates"
             [GB]="United Kingdom" [US]="USA" [VN]="Vietnam" [YE]="Yemen" [LC]="Saint Lucia" [EE]="Estonia"
             [MG]="Madagascar" [TZ]="Tanzania" [BN]="Brunei" [CG]="Republic of the Congo" [PR]="Puerto Rico"
-            [TN]="Tunisia" [HM]="Heard Island and McDonald Islands" [BM]="Bermuda" [GE]="Georgia" [BI]="Burundi"
+            [TN]="Tunisia" [HM]="Heard Island and McDonald Islands" [BM]="Bermuda" [BI]="Burundi"
             [SM]="San Marino" [NU]="Niue" [BB]="Barbados" [GW]="Guinea-Bissau" [GN]="Guinea" [CM]="Cameroon"
             [MT]="Malta" [FJ]="Fiji" [MM]="Myanmar" [YT]="Mayotte" [CR]="Costa Rica" [GH]="Ghana" [BA]="Bosnia and Herzegovina"
           )
 
-          # تابع ساخت ایموجی پرچم با پایتون (مطمئن و استاندارد)
+          # Flag emoji builder via Python
           flag_emoji() {
             local code="$1"
-            python3 - <<'PY' "$code"
+            python3 - "$code" <<'PY'
 import sys
 code = sys.argv[1].strip().upper()
 if len(code) != 2 or not code.isalpha():
-    print("🏳️")  # fallback white flag
-    sys.exit(0)
-base = 0x1F1E6  # 'A'
+    print("🏳️")
+    raise SystemExit
+base = 0x1F1E6
 cp1 = base + (ord(code[0]) - ord('A'))
 cp2 = base + (ord(code[1]) - ord('A'))
 print(chr(cp1) + chr(cp2))
@@ -93,7 +93,6 @@ PY
 
           send_chunk() {
             local chunk="$1"
-            # ارسال به صورت متن ساده؛ لینک‌ها داخل <> برای حذف پیش‌نمایش
             jq -n --arg msg "$chunk" '{content: $msg}' | \
               curl -sS -X POST -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK" >/dev/null
           }
@@ -108,7 +107,6 @@ PY
             NAME=${COUNTRY_NAMES[$CODE]:-$CODE}
             EMOJI=$(flag_emoji "$CODE")
             FULL_URL="${REPO_BASE_URL}/CIDR/${FILE_NAME}"
-
             LINE="$EMOJI **$NAME**: <${FULL_URL}>"
 
             if [[ -z "$MESSAGE" ]]; then
@@ -118,7 +116,6 @@ PY
             fi
 
             COUNT=$((COUNT + 1))
-
             if [[ $COUNT -ge $MAX_PER_MESSAGE ]]; then
               send_chunk "$MESSAGE"
               MESSAGE=""
