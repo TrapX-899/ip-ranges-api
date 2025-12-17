@@ -103,3 +103,46 @@ jobs:
           if [ $COUNT -gt 0 ]; then
             jq -n --arg msg "$MESSAGE" '{content: $msg}' | curl -X POST -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK"
           fi
+
+- name: Send Final Status & Analytics
+        if: always() && env.updated == 'true'
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          # تنظیم ساعت به وقت ایران
+          TZ='Asia/Tehran'
+          LAST_UPDATE=$(date +'%Y/%m/%d - %H:%M')
+
+          # محاسبه تعداد کل کشورهای آپدیت شده
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            FILES=$(find CIDR/ -name "*-ipv4-*" | grep -v "ipv6")
+          else
+            FILES=$(git diff --name-only HEAD@{1} HEAD | grep "CIDR/" | grep "ipv4" | grep -v "ipv6" || true)
+          fi
+          
+          COUNTRY_COUNT=$(echo "$FILES" | grep -v '^$' | wc -l)
+          
+          # محاسبه مجموع کل خطوط (تعداد کل رنج‌های آی‌پی)
+          TOTAL_IPS=0
+          for f in $FILES; do
+            if [ -f "$f" ]; then
+              LINES=$(wc -l < "$f")
+              TOTAL_IPS=$((TOTAL_IPS + LINES))
+            fi
+          done
+
+          # جملات وضعیت نهایی (رندوم نظامی)
+          FINAL_QUOTES=("Mission Accomplished. Base Secured." "Intelligence Gathering Complete." "All Units Returned to Hangar." "V12 Engine Cooling Down.")
+          RANDOM_QUOTE=${FINAL_QUOTES[$RANDOM % ${#FINAL_QUOTES[@]}]}
+
+          # ساخت پیام نهایی
+          FINAL_REPORT="🏁 **FINAL MISSION SUMMARY**"$'\n'
+          FINAL_REPORT+="━━━━━━━━━━━━━━━━━━━━"$'\n'
+          FINAL_REPORT+="📅 **Last Update (Iran):** \`$LAST_UPDATE\`"$'\n'
+          FINAL_REPORT+="🌍 **Total Countries Synced:** \`$COUNTRY_COUNT\`"$'\n'
+          FINAL_REPORT+="🔢 **Total IP Ranges Scanned:** \`$TOTAL_IPS\`"$'\n'
+          FINAL_REPORT+="📝 **Operation Status:** \`$RANDOM_QUOTE\`"$'\n'
+          FINAL_REPORT+="━━━━━━━━━━━━━━━━━━━━"
+
+          # ارسال به دیسکورد
+          jq -n --arg msg "$FINAL_REPORT" '{content: $msg}' | curl -X POST -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK"
