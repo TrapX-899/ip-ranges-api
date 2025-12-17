@@ -1,5 +1,4 @@
 name: Country IP Sync & Final Clean Links
-
 on:
   schedule:
     - cron: '0 * * * *'
@@ -10,115 +9,97 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-
     steps:
-      - name: Checkout fork
+      - name: Checkout Fork
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
-      - name: Sync with original repository
+      - name: Sync with Original Repository
         run: |
-          set -e
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
           git remote add upstream https://github.com/ebrasha/cidr-ip-ranges-by-country.git || true
           git fetch upstream
-          git checkout master
-          if git merge upstream/master --ff-only; then
-            echo "updated=true" >> "$GITHUB_ENV"
-            git push origin master
+          git checkout master || git checkout main
+          if git merge upstream/master --ff-only || git merge upstream/main --ff-only; then
+            echo "updated=true" >> $GITHUB_ENV
+            git push origin HEAD
           else
-            echo "updated=false" >> "$GITHUB_ENV"
+            echo "updated=false" >> $GITHUB_ENV
           fi
 
-      - name: Send grouped links to Discord
+      - name: Send Grouped Links to Discord
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-          REPO_BASE_URL: https://github.com/${{ github.repository }}/blob/master
-          EVENT_NAME: ${{ github.event_name }}
+          REPO_BASE_URL: "https://github.com/${{ github.repository }}/blob/master"
         run: |
-          set -e
-
-          # Pick files: only IPv4 inside CIDR
-          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
-            FILES=$(find . -type f -name "*-ipv4-Hackers.Zone.txt" | grep "CIDR/" | sort | head -n 80)
-          elif [[ "${updated:-false}" == "true" ]]; then
-            FILES=$(git diff --name-only HEAD@{1} HEAD | grep "CIDR/" | grep -E '\-ipv4\-Hackers\.Zone\.txt$' || true)
+          # استخراج فایل‌ها (فقط IPv4)
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            FILES=$(find CIDR/ -name "*-ipv4-*" | grep -v "ipv6" | sort)
+          elif [[ "$updated" == "true" ]]; then
+            FILES=$(git diff --name-only HEAD@{1} HEAD | grep "CIDR/" | grep "ipv4" | grep -v "ipv6" || true)
           else
-            echo "No changes detected."
+            echo "تغییر جدیدی یافت نشد."
             exit 0
           fi
 
-          if [[ -z "$FILES" ]]; then
-            echo "No eligible IPv4 files found to send."
+          if [ -z "$FILES" ]; then
+            echo "لیست فایل‌ها خالی است."
             exit 0
           fi
-
-          # Country names dictionary
-          declare -A COUNTRY_NAMES=(
-            [AF]="Afghanistan" [AL]="Albania" [DZ]="Algeria" [AD]="Andorra" [AO]="Angola" [AR]="Argentina" [AM]="Armenia"
-            [AU]="Australia" [AT]="Austria" [AZ]="Azerbaijan" [BH]="Bahrain" [BD]="Bangladesh" [BY]="Belarus"
-            [BE]="Belgium" [BR]="Brazil" [BG]="Bulgaria" [CA]="Canada" [CN]="China" [CO]="Colombia" [HR]="Croatia"
-            [CU]="Cuba" [CY]="Cyprus" [CZ]="Czech Republic" [DK]="Denmark" [EG]="Egypt" [FI]="Finland" [FR]="France"
-            [GE]="Georgia" [DE]="Germany" [GR]="Greece" [HK]="Hong Kong" [HU]="Hungary" [IS]="Iceland" [IN]="India"
-            [ID]="Indonesia" [IR]="Iran" [IQ]="Iraq" [IE]="Ireland" [IT]="Italy" [JP]="Japan" [JO]="Jordan"
-            [KZ]="Kazakhstan" [KW]="Kuwait" [LB]="Lebanon" [LY]="Libya" [MY]="Malaysia" [MX]="Mexico" [MC]="Monaco"
-            [MA]="Morocco" [NL]="Netherlands" [NZ]="New Zealand" [NO]="Norway" [OM]="Oman" [PK]="Pakistan"
-            [PS]="Palestine" [PH]="Philippines" [PL]="Poland" [PT]="Portugal" [QA]="Qatar" [RO]="Romania" [RU]="Russia"
-            [SA]="Saudi Arabia" [SG]="Singapore" [KR]="South Korea" [ES]="Spain" [SE]="Sweden" [CH]="Switzerland"
-            [SY]="Syria" [TW]="Taiwan" [TH]="Thailand" [TR]="Turkey" [UA]="Ukraine" [AE]="United Arab Emirates"
-            [GB]="United Kingdom" [US]="USA" [VN]="Vietnam" [YE]="Yemen" [LC]="Saint Lucia" [EE]="Estonia"
-            [MG]="Madagascar" [TZ]="Tanzania" [BN]="Brunei" [CG]="Republic of the Congo" [PR]="Puerto Rico"
-            [TN]="Tunisia" [HM]="Heard Island and McDonald Islands" [BM]="Bermuda" [BI]="Burundi"
-            [SM]="San Marino" [NU]="Niue" [BB]="Barbados" [GW]="Guinea-Bissau" [GN]="Guinea" [CM]="Cameroon"
-            [MT]="Malta" [FJ]="Fiji" [MM]="Myanmar" [YT]="Mayotte" [CR]="Costa Rica" [GH]="Ghana" [BA]="Bosnia and Herzegovina"
-          )
-
-          # Flag emoji via Python one-liner (no heredoc)
-          flag_emoji() {
-            local code="$1"
-            python3 -c 'import sys; c=sys.argv[1].strip().upper()
-if len(c)!=2 or not c.isalpha(): print("🏳️"); exit(0)
-base=0x1F1E6
-print(chr(base+(ord(c[0])-65))+chr(base+(ord(c[1])-65)))' "$code"
-          }
-
-          send_chunk() {
-            local chunk="$1"
-            jq -n --arg msg "$chunk" '{content: $msg}' | \
-              curl -sS -X POST -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK" >/dev/null
-          }
 
           MESSAGE=""
           COUNT=0
-          MAX_PER_MESSAGE=10
 
-          while IFS= read -r FILE; do
+          for FILE in $FILES; do
             FILE_NAME=$(basename "$FILE")
-            CODE=$(echo "$FILE_NAME" | cut -d'-' -f1 | tr '[:lower:]' '[:upper:]')
-            NAME=${COUNTRY_NAMES[$CODE]:-$CODE}
-            EMOJI=$(flag_emoji "$CODE")
-            FULL_URL="${REPO_BASE_URL}/CIDR/${FILE_NAME}"
-            LINE="$EMOJI **$NAME**: <${FULL_URL}>"
+            # استخراج کد دو رقمی کشور (مثلا TH یا IR)
+            CODE=$(echo $FILE_NAME | cut -d'-' -f1 | tr '[:lower:]' '[:upper:]')
+            
+            # تبدیل کد کشور به ایموجی پرچم (Regional Indicator Symbols)
+            # این بخش کد هگز کد کشور را به ایموجی تبدیل می‌کند
+            EMOJI=$(python3 -c "print(''.join(chr(127397 + ord(c)) for c in '$CODE'))" 2>/dev/null || echo "🌐")
 
-            if [[ -z "$MESSAGE" ]]; then
+            # نام کشورها - اضافه کردن موارد جامانده در تصویر شما
+            case $CODE in
+              TH) NAME="Thailand" ;; LC) NAME="Saint Lucia" ;; EE) NAME="Estonia" ;;
+              MG) NAME="Madagascar" ;; TZ) NAME="Tanzania" ;; BN) NAME="Brunei" ;;
+              CG) NAME="Congo" ;; PR) NAME="Puerto Rico" ;; TN) NAME="Tunisia" ;;
+              TR) NAME="Turkey" ;; BY) NAME="Belarus" ;; HM) NAME="Heard/McDonald Islands" ;;
+              AD) NAME="Andorra" ;; BM) NAME="Bermuda" ;; PT) NAME="Portugal" ;;
+              GE) NAME="Georgia" ;; BI) NAME="Burundi" ;; SM) NAME="San Marino" ;;
+              NU) NAME="Niue" ;; BB) NAME="Barbados" ;; RU) NAME="Russia" ;;
+              GW) NAME="Guinea-Bissau" ;; BD) NAME="Bangladesh" ;; GN) NAME="Guinea" ;;
+              CM) NAME="Cameroon" ;; LY) NAME="Libya" ;; MT) NAME="Malta" ;;
+              IT) NAME="Italy" ;; HK) NAME="Hong Kong" ;; YE) NAME="Yemen" ;;
+              FJ) NAME="Fiji" ;; MM) NAME="Myanmar" ;; YT) NAME="Mayotte" ;;
+              CR) NAME="Costa Rica" ;; BV) NAME="Bouvet Island" ;; BA) NAME="Bosnia" ;;
+              IR) NAME="Iran" ;; US) NAME="USA" ;; DE) NAME="Germany" ;;
+              *) NAME="$CODE" ;; # اگر در لیست نبود کد را نشان بده
+            esac
+
+            FULL_URL="${REPO_BASE_URL}/$FILE"
+            LINE="$EMOJI **$NAME**: <$FULL_URL>"
+            
+            if [ -z "$MESSAGE" ]; then
               MESSAGE="$LINE"
             else
               MESSAGE="$MESSAGE"$'\n'"$LINE"
             fi
-
+            
             COUNT=$((COUNT + 1))
-            if [[ $COUNT -ge $MAX_PER_MESSAGE ]]; then
-              send_chunk "$MESSAGE"
+
+            # ارسال در دسته‌های ۱۰ تایی
+            if [ $COUNT -eq 10 ]; then
+              jq -n --arg msg "$MESSAGE" '{content: $msg}' | curl -X POST -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK"
               MESSAGE=""
               COUNT=0
-              sleep 2
+              sleep 1 # وقفه کوتاه برای جلوگیری از بلاک شدن توسط دیسکورد
             fi
-          done <<< "$FILES"
+          done
 
-          if [[ $COUNT -gt 0 ]]; then
-            send_chunk "$MESSAGE"
+          # ارسال باقی‌مانده پیام‌ها
+          if [ $COUNT -gt 0 ]; then
+            jq -n --arg msg "$MESSAGE" '{content: $msg}' | curl -X POST -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK"
           fi
-
-          echo "Discord messages sent successfully."
