@@ -1,4 +1,4 @@
-name: Country IP Sync & Final Optimized Links
+name: Country IP Sync & Final Clean Links
 
 on:
   schedule:
@@ -35,10 +35,8 @@ jobs:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
           REPO_BASE_URL: "https://github.com/${{ github.repository }}/blob/master"
         run: |
-          # انتخاب فایل‌ها و حذف ipv6
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "حالت دستی فعال شد."
-            FILES=$(find . -name "*.txt" | grep "CIDR/" | grep -v "ipv6" | head -n 60)
+            FILES=$(find . -name "*.txt" | grep "CIDR/" | grep -v "ipv6" | head -n 80)
           elif [[ "$updated" == "true" ]]; then
             FILES=$(git diff --name-only HEAD@{1} HEAD | grep '\.txt$' | grep -v "ipv6" || true)
           else
@@ -46,23 +44,37 @@ jobs:
             exit 0
           fi
 
-          if [ -z "$FILES" ]; then
-             echo "فایلی برای ارسال نیست."
-             exit 0
-          fi
-
           MESSAGE=""
           COUNT=0
 
           for FILE in $FILES; do
             FILE_NAME=$(basename "$FILE")
-            # استخراج کد کشور و تبدیل به حروف بزرگ
             CODE=$(echo $FILE_NAME | cut -d'-' -f1 | tr '[:lower:]' '[:upper:]')
             
+            # دیکشنری نام کشورها (نسخه انگلیسی برای پوشش کامل)
+            case $CODE in
+              AF) NAME="Afghanistan" ;; AL) NAME="Albania" ;; DZ) NAME="Algeria" ;; AD) NAME="Andorra" ;; AO) NAME="Angola" ;;
+              AR) NAME="Argentina" ;; AM) NAME="Armenia" ;; AU) NAME="Australia" ;; AT) NAME="Austria" ;; AZ) NAME="Azerbaijan" ;;
+              BH) NAME="Bahrain" ;; BD) NAME="Bangladesh" ;; BY) NAME="Belarus" ;; BE) NAME="Belgium" ;; BR) NAME="Brazil" ;;
+              BG) NAME="Bulgaria" ;; CA) NAME="Canada" ;; CN) NAME="China" ;; CO) NAME="Colombia" ;; HR) NAME="Croatia" ;;
+              CU) NAME="Cuba" ;; CY) NAME="Cyprus" ;; CZ) NAME="Czech Republic" ;; DK) NAME="Denmark" ;; EG) NAME="Egypt" ;;
+              FI) NAME="Finland" ;; FR) NAME="France" ;; GE) NAME="Georgia" ;; DE) NAME="Germany" ;; GR) NAME="Greece" ;;
+              HK) NAME="Hong Kong" ;; HU) NAME="Hungary" ;; IS) NAME="Iceland" ;; IN) NAME="India" ;; ID) NAME="Indonesia" ;;
+              IR) NAME="Iran" ;; IQ) NAME="Iraq" ;; IE) NAME="Ireland" ;; IT) NAME="Italy" ;; JP) NAME="Japan" ;;
+              JO) NAME="Jordan" ;; KZ) NAME="Kazakhstan" ;; KW) NAME="Kuwait" ;; LB) NAME="Lebanon" ;; LY) NAME="Libya" ;;
+              MY) NAME="Malaysia" ;; MX) NAME="Mexico" ;; MC) NAME="Monaco" ;; MA) NAME="Morocco" ;; NL) NAME="Netherlands" ;;
+              NZ) NAME="New Zealand" ;; NO) NAME="Norway" ;; OM) NAME="Oman" ;; PK) NAME="Pakistan" ;; PS) NAME="Palestine" ;;
+              PH) NAME="Philippines" ;; PL) NAME="Poland" ;; PT) NAME="Portugal" ;; QA) NAME="Qatar" ;; RO) NAME="Romania" ;;
+              RU) NAME="Russia" ;; SA) NAME="Saudi Arabia" ;; SG) NAME="Singapore" ;; KR) NAME="South Korea" ;; ES) NAME="Spain" ;;
+              SE) NAME="Sweden" ;; CH) NAME="Switzerland" ;; SY) NAME="Syria" ;; TW) NAME="Taiwan" ;; TH) NAME="Thailand" ;;
+              TR) NAME="Turkey" ;; UA) NAME="Ukraine" ;; AE) NAME="United Arab Emirates" ;; GB) NAME="United Kingdom" ;; US) NAME="USA" ;;
+              VN) NAME="Vietnam" ;; YE) NAME="Yemen" ;; *) NAME="$CODE" ;;
+            esac
+
             FULL_URL="${REPO_BASE_URL}/CIDR/${FILE_NAME}"
             
-            # افزودن خط جدید به پیام
-            LINE="🌐 **کشور $CODE**: [مشاهده لیست آی‌پی]($FULL_URL)"
+            # قرار دادن لینک داخل <> برای حذف پیش‌نمایش (No Embed)
+            LINE="🌐 **$NAME**: <$FULL_URL>"
             
             if [ -z "$MESSAGE" ]; then
               MESSAGE="$LINE"
@@ -72,7 +84,6 @@ jobs:
             
             COUNT=$((COUNT + 1))
 
-            # ارسال در دسته‌های ۱۰ تایی برای جلوگیری از سنگین شدن پیام
             if [ $COUNT -eq 10 ]; then
               jq -n --arg msg "$MESSAGE" '{content: $msg}' | curl -X POST -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK"
               MESSAGE=""
@@ -81,7 +92,6 @@ jobs:
             fi
           done
 
-          # ارسال باقی‌مانده لینک‌ها
           if [ $COUNT -gt 0 ]; then
             jq -n --arg msg "$MESSAGE" '{content: $msg}' | curl -X POST -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK"
           fi
