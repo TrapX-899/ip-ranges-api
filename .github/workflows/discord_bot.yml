@@ -16,14 +16,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.9'
-
-      - name: Install dependencies
-        run: pip install pycountry country-flags emoji
-
       - name: Sync with Original Repository
         run: |
           git config --global user.name "GitHub Action"
@@ -43,136 +35,53 @@ jobs:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
           REPO_BASE_URL: "https://github.com/${{ github.repository }}/blob/master"
         run: |
-          python3 << 'EOF'
-          import os
-          import glob
-          import json
-          import subprocess
-          import re
-          from pycountry import countries
-          import country_flags
-          
-          def get_country_info(country_code):
-              """Get country name and flag emoji from country code"""
-              try:
-                  # Get country object
-                  country = countries.get(alpha_2=country_code.upper())
-                  if country:
-                      # Get country name
-                      name = country.name
-                      
-                      # Get flag emoji using country-flags library
-                      try:
-                          flag = country_flags.get_flag(country_code.upper())
-                      except:
-                          # Fallback emoji mapping for common countries
-                          flag_map = {
-                              'US': '🇺🇸', 'GB': '🇬🇧', 'IR': '🇮🇷', 'CN': '🇨🇳', 'RU': '🇷🇺',
-                              'DE': '🇩🇪', 'FR': '🇫🇷', 'JP': '🇯🇵', 'KR': '🇰🇷', 'IN': '🇮🇳',
-                              'BR': '🇧🇷', 'CA': '🇨🇦', 'AU': '🇦🇺', 'TR': '🇹🇷', 'SA': '🇸🇦',
-                              'AE': '🇦🇪', 'IQ': '🇮🇶', 'SY': '🇸🇾', 'YE': '🇾🇪', 'AF': '🇦🇫',
-                              'PK': '🇵🇰', 'IL': '🇮🇱', 'PS': '🇵🇸'
-                          }
-                          flag = flag_map.get(country_code.upper(), '🌐')
-                      
-                      return name, flag
-              except:
-                  pass
-              
-              return country_code, '🌐'
-          
-          def is_ipv6_file(filename):
-              """Check if file contains IPv6 addresses"""
-              return 'ipv6' in filename.lower()
-          
-          # Get changed files or all files
-          if os.environ.get('GITHUB_EVENT_NAME') == 'workflow_dispatch':
-              # Get all IPv4 files (exclude IPv6)
-              files = []
-              for file in glob.glob('./CIDR/*.txt'):
-                  if not is_ipv6_file(file):
-                      files.append(file)
-              files = files[:80]  # Limit to 80 files
-          else:
-              if os.environ.get('updated') != 'true':
-                  print("No new changes found.")
-                  exit(0)
-              
-              # Get changed files excluding IPv6
-              result = subprocess.run(
-                  ['git', 'diff', '--name-only', 'HEAD@{1}', 'HEAD'],
-                  capture_output=True,
-                  text=True
-              )
-              
-              files = []
-              for line in result.stdout.split('\n'):
-                  if line.endswith('.txt') and not is_ipv6_file(line):
-                      files.append(line.strip())
-          
-          if not files:
-              print("No IPv4 files to process.")
-              exit(0)
-          
-          # Group by 10 messages per request
-          discord_webhook = os.environ.get('DISCORD_WEBHOOK')
-          repo_base_url = os.environ.get('REPO_BASE_URL')
-          
-          messages = []
-          current_message = []
-          count = 0
-          
-          for file in files:
-              # Extract country code from filename
-              filename = os.path.basename(file)
-              # Remove .txt extension and extract country code
-              country_code = filename.replace('.txt', '').split('-')[0].upper()
-              
-              # Get country name and flag
-              country_name, flag_emoji = get_country_info(country_code)
-              
-              # Create clean URL without embed preview
-              clean_url = f"{repo_base_url}/{file.lstrip('./')}"
-              
-              # Format line: Flag + Country Name + Clean Link
-              line = f"{flag_emoji} **{country_name}**: <{clean_url}>"
-              current_message.append(line)
-              count += 1
-              
-              if count >= 10:
-                  messages.append('\n'.join(current_message))
-                  current_message = []
-                  count = 0
-          
-          # Add remaining messages
-          if current_message:
-              messages.append('\n'.join(current_message))
-          
-          # Send to Discord
-          import requests
-          import time
-          
-          for i, message in enumerate(messages):
-              payload = {
-                  "content": message,
-                  "allowed_mentions": {
-                      "parse": []
-                  }
-              }
-              
-              response = requests.post(
-                  discord_webhook,
-                  json=payload,
-                  headers={'Content-Type': 'application/json'}
-              )
-              
-              if response.status_code != 204:
-                  print(f"Error sending message: {response.status_code}")
-                  print(response.text)
-              
-              # Delay between messages
-              if i < len(messages) - 1:
-                  time.sleep(2)
-          
-          print(f"Sent {len(messages)} message(s) to Discord")
-          EOF
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            FILES=$(find . -name "*-ipv4-Hackers.Zone.txt" | grep "CIDR/" | head -n 80)
+          elif [[ "$updated" == "true" ]]; then
+            FILES=$(git diff --name-only HEAD@{1} HEAD | grep '\.txt$' | grep "CIDR/" | grep -v "ipv6" || true)
+          else
+            echo "تغییری یافت نشد."
+            exit 0
+          fi
+
+          MESSAGE=""
+          COUNT=0
+          MAX_PER_MESSAGE=10
+
+          for FILE in $FILES; do
+            FILE_NAME=$(basename "$FILE")
+            CODE=$(echo $FILE_NAME | cut -d'-' -f1 | tr '[:lower:]' '[:upper:]')
+
+            # نام کشورها
+            declare -A COUNTRY_NAMES=(
+              [TH]="Thailand" [LC]="Saint Lucia" [EE]="Estonia" [MG]="Madagascar" [TZ]="Tanzania"
+              [BN]="Brunei" [CG]="Republic of the Congo" [PR]="Puerto Rico" [TN]="Tunisia" [TR]="Turkey"
+              [BY]="Belarus" [HM]="Heard Island" [AD]="Andorra" [BM]="Bermuda" [PT]="Portugal"
+              [GE]="Georgia" [BI]="Burundi" [SM]="San Marino" [NU]="Niue" [BB]="Barbados"
+              [RU]="Russia" [GW]="Guinea-Bissau" [BD]="Bangladesh" [GN]="Guinea" [CM]="Cameroon"
+              [LY]="Libya" [MT]="Malta" [IT]="Italy" [HK]="Hong Kong" [YE]="Yemen"
+              [FJ]="Fiji" [MM]="Myanmar" [YT]="Mayotte" [CR]="Costa Rica" [GH]="Ghana" [BA]="Bosnia and Herzegovina"
+            )
+
+            NAME=${COUNTRY_NAMES[$CODE]:-$CODE}
+
+            # ایموجی پرچم کشور
+            EMOJI=$(echo $CODE | awk '{printf "\\U1F1%s\\U1F1%s", substr($0,1,1), substr($0,2,1)}' | xargs -0 printf)
+
+            FULL_URL="${REPO_BASE_URL}/CIDR/${FILE_NAME}"
+            LINE="$EMOJI **$NAME**: <$FULL_URL>"
+
+            MESSAGE="$MESSAGE"$'\n'"$LINE"
+            COUNT=$((COUNT + 1))
+
+            if [ $COUNT -eq $MAX_PER_MESSAGE ]; then
+              jq -n --arg msg "$MESSAGE" '{content: $msg}' | curl -X POST -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK"
+              MESSAGE=""
+              COUNT=0
+              sleep 2
+            fi
+          done
+
+          if [ $COUNT -gt 0 ]; then
+            jq -n --arg msg "$MESSAGE" '{content: $msg}' | curl -X POST -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK"
+          fi
