@@ -23,7 +23,7 @@ jobs:
           TZ='Asia/Tehran'
           START_TIME=$(date +'%H:%M:%S')
           
-          # کد رمزهای با ابهت (ترکیبی از پدافند و بنز W140)
+          # کد رمزها (ترکیبی از پدافند ها)
           CODENAMES=("S400-TRIUMF" "BAVAR-373-CORE" "PATRIOT-STRIKE" "V12-IRON-CLAD" "THOR-RADAR")
           SELECTED_CODE=${CODENAMES[$RANDOM % ${#CODENAMES[@]}]}
 
@@ -83,7 +83,7 @@ jobs:
             # این بخش کد هگز کد کشور را به ایموجی تبدیل می‌کند
             EMOJI=$(python3 -c "print(''.join(chr(127397 + ord(c)) for c in '$CODE'))" 2>/dev/null || echo "🌐")
 
-            # نام کشورها - اضافه کردن موارد جامانده در تصویر شما
+            # نام کشورها
             case $CODE in
               TH) NAME="Thailand" ;; LC) NAME="Saint Lucia" ;; EE) NAME="Estonia" ;;
               MG) NAME="Madagascar" ;; TZ) NAME="Tanzania" ;; BN) NAME="Brunei" ;;
