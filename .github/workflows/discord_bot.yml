@@ -16,28 +16,25 @@ jobs:
           fetch-depth: 0
 
       - name: Send Mission Start Header
-        if: always() && env.updated == 'true'
+        if: always()
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         run: |
-          # تنظیم ساعت ایران برای شروع
           TZ='Asia/Tehran'
           START_TIME=$(date +'%H:%M:%S')
           
-          # انتخاب یک کد رمز تصادفی برای ماموریت (تم نظامی و بنز)
-          CODENAMES=("SILVER-ARROW" "IRON-CLAD" "V12-PHANTOM" "DESERT-STORM" "S-400 Triumf-PROTOCOL")
+          # کد رمزهای با ابهت (ترکیبی از پدافند و بنز W140)
+          CODENAMES=("S400-TRIUMF" "BAVAR-373-CORE" "PATRIOT-STRIKE" "V12-IRON-CLAD" "THOR-RADAR")
           SELECTED_CODE=${CODENAMES[$RANDOM % ${#CODENAMES[@]}]}
 
-          # طراحی هدر شروع
-          START_MSG="🚀 **NEW DATA INTERCEPTION DETECTED**"$'\n'
+          START_MSG="🚀 **NEW OPERATION INITIATED**"$'\n'
           START_MSG+="┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓"$'\n'
-          START_MSG+="  📡 **OPERATION:** \`$SELECTED_CODE\`"$'\n'
-          START_MSG+="  ⏰ **START TIME:** \`$START_TIME\`"$'\n'
-          START_MSG+="  🛠️ **UNIT:** \`S-400 Triumf-Heavy-Duty\`"$'\n'
+          START_MSG+="  📡 **UNIT:** \`Bavar-373-Radar-Station\`"$'\n'
+          START_MSG+="  🛡️ **CODENAME:** \`$SELECTED_CODE\`"$'\n'
+          START_MSG+="  ⏰ **TIME:** \`$START_TIME\`"$'\n'
           START_MSG+="┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛"$'\n'
-          START_MSG+="*Incoming Intelligence Feed...* 📥"
+          START_MSG+="*Scanning for Intelligence Data...* 📥"
 
-          # ارسال به دیسکورد
           jq -n --arg msg "$START_MSG" '{content: $msg}' | curl -X POST -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK"
 
       - name: Sync with Original Repository
