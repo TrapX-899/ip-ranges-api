@@ -35,35 +35,32 @@ jobs:
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         run: |
-          # بررسی وجود وب‌هوک
-          if [ -z "$DISCORD_WEBHOOK" ]; then
-            echo "خطا: وب‌هوک دیسکورد در Secrets تعریف نشده است!"
-            exit 1
-          fi
-
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "اجرای دستی: در حال جستجوی تمامی فایل‌های txt..."
-            # جستجوی عمیق‌تر برای یافتن فایل‌ها در تمامی پوشه‌ها
-            FILES=$(find . -maxdepth 3 -name "*.txt" | head -n 5)
+            echo "حالت دستی: ارسال ۵ فایل اول..."
+            FILES=$(find . -name "*.txt" | grep "CIDR/" | head -n 5)
           elif [[ "$updated" == "true" ]]; then
-            echo "اجرای خودکار: بررسی تغییرات..."
+            echo "حالت خودکار: ارسال تغییرات جدید..."
             FILES=$(git diff --name-only HEAD@{1} HEAD | grep '\.txt$' || true)
           else
-            echo "تغییر جدیدی نبود."
+            echo "تغییر جدیدی یافت نشد."
             exit 0
           fi
 
           for FILE in $FILES; do
-            # حذف ./ از ابتدای نام فایل برای زیبایی
-            CLEAN_NAME=$(echo $FILE | sed 's|./||')
-            echo "ارسال فایل: $CLEAN_NAME"
-            
-            # خواندن محتوا و آماده‌سازی برای JSON (حذف کاراکترهای غیرمجاز)
-            CONTENT=$(head -n 15 "$FILE" | tr -d '"' | tr -d '\r')
-            
-            curl -H "Content-Type: application/json" \
-                 -d "{\"content\": \"🚀 **تست ارسال فایل**\n📂 نام فایل: \`$CLEAN_NAME\`\n\`\`\`\n$CONTENT\n\`\`\`\"}" \
-                 "$DISCORD_WEBHOOK"
-            
-            sleep 1
+            if [ -f "$FILE" ]; then
+              CLEAN_NAME=$(basename "$FILE")
+              # خواندن ۱۵ خط اول و آماده‌سازی امن برای JSON
+              CONTENT=$(head -n 15 "$FILE")
+              
+              echo "در حال ارسال ایمن: $CLEAN_NAME"
+              
+              # استفاده از jq برای ساختن JSON استاندارد و جلوگیری از خطای 50109
+              PAYLOAD=$(jq -n --arg msg "📂 **فایل: $CLEAN_NAME**\n\`\`\`\n$CONTENT\n\`\`\`" '{content: $msg}')
+              
+              curl -H "Content-Type: application/json" \
+                   -d "$PAYLOAD" \
+                   "$DISCORD_WEBHOOK"
+              
+              sleep 1
+            fi
           done
