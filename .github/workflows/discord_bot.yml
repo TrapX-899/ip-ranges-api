@@ -1,4 +1,4 @@
-name: Country IP Sync & Link Sender
+name: Country IP Sync & Optimized Discord Links
 
 on:
   schedule:
@@ -23,7 +23,6 @@ jobs:
           git remote add upstream https://github.com/ebrasha/cidr-ip-ranges-by-country.git || true
           git fetch upstream
           git checkout master
-          
           if git merge upstream/master --ff-only; then
             echo "updated=true" >> $GITHUB_ENV
             git push origin master
@@ -31,42 +30,59 @@ jobs:
             echo "updated=false" >> $GITHUB_ENV
           fi
 
-      - name: Send Links to Discord
+      - name: Send Grouped Links to Discord
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-          # آدرس پایه برای لینک‌های گیت‌هاب شما
           REPO_BASE_URL: "https://github.com/${{ github.repository }}/blob/master"
         run: |
+          # پیدا کردن فایل‌ها و فیلتر کردن IPv6
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "حالت دستی: ارسال ۲۰ فایل اول به صورت لینک..."
-            FILES=$(find . -name "*.txt" | grep "CIDR/" | head -n 20)
+            FILES=$(find . -name "*.txt" | grep "CIDR/" | grep -v "ipv6" | head -n 50)
           elif [[ "$updated" == "true" ]]; then
-            echo "حالت خودکار: ارسال لینک فایل‌های تغییر کرده..."
-            FILES=$(git diff --name-only HEAD@{1} HEAD | grep '\.txt$' || true)
+            FILES=$(git diff --name-only HEAD@{1} HEAD | grep '\.txt$' | grep -v "ipv6" || true)
           else
             echo "تغییر جدیدی یافت نشد."
             exit 0
           fi
 
+          MESSAGE_BATCH=""
+          COUNT=0
+
           for FILE in $FILES; do
-            if [ -f "$FILE" ]; then
-              # تمیز کردن مسیر فایل برای ساخت لینک
-              CLEAN_PATH=$(echo $FILE | sed 's|./||')
-              FILE_NAME=$(basename "$FILE")
-              
-              # ساخت لینک مستقیم
-              FULL_URL="${REPO_BASE_URL}/${CLEAN_PATH}"
-              
-              echo "ارسال لینک: $FILE_NAME"
-              
-              # ارسال به دیسکورد به صورت مارک‌داون (نام فایل کلیک‌شدنی)
-              PAYLOAD=$(jq -n --arg name "$FILE_NAME" --arg url "$FULL_URL" \
-                '{content: "🌐 **لیست آی‌پی کشور: [\($name)](\($url))**\nبرای مشاهده لیست کامل روی نام کشور کلیک کنید."}')
-              
-              curl -H "Content-Type: application/json" \
-                   -d "$PAYLOAD" \
-                   "$DISCORD_WEBHOOK"
-              
-              sleep 0.5
+            CLEAN_PATH=$(echo $FILE | sed 's|./||')
+            FILE_NAME=$(basename "$FILE")
+            
+            # استخراج کد کشور (مثلاً IR یا AE)
+            COUNTRY_CODE=$(echo $FILE_NAME | cut -d'-' -f1 | tr '[:lower:]' '[:upper:]')
+            
+            # دیکشنری نام کشورها (می‌توانید موارد بیشتری اضافه کنید)
+            case $COUNTRY_CODE in
+              IR) FULL_NAME="ایران 🇮🇷" ;;
+              AE) FULL_NAME="امارات 🇦🇪" ;;
+              DE) FULL_NAME="آلمان 🇩🇪" ;;
+              US) FULL_NAME="آمریکا 🇺🇸" ;;
+              TR) FULL_NAME="ترکیه 🇹🇷" ;;
+              GB) FULL_NAME="انگلیس 🇬🇧" ;;
+              *) FULL_NAME="$COUNTRY_CODE" ;;
+            esac
+
+            FULL_URL="${REPO_BASE_URL}/${CLEAN_PATH}"
+            LINE="🌐 **$FULL_NAME**: [مشاهده لیست]($FULL_URL)\n"
+            MESSAGE_BATCH="${MESSAGE_BATCH}${LINE}"
+            COUNT=$((COUNT + 1))
+
+            # هر ۱۰ لینک را در یک پیام بفرست
+            if [ $COUNT -eq 10 ]; then
+              PAYLOAD=$(jq -n --arg msg "$MESSAGE_BATCH" '{content: $msg}')
+              curl -H "Content-Type: application/json" -d "$PAYLOAD" "$DISCORD_WEBHOOK"
+              MESSAGE_BATCH=""
+              COUNT=0
+              sleep 2
             fi
           done
+
+          # ارسال باقی‌مانده لینک‌ها
+          if [ $COUNT -gt 0 ]; then
+            PAYLOAD=$(jq -n --arg msg "$MESSAGE_BATCH" '{content: $msg}')
+            curl -H "Content-Type: application/json" -d "$PAYLOAD" "$DISCORD_WEBHOOK"
+          fi
