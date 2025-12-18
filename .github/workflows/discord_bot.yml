@@ -16,7 +16,7 @@ jobs:
           fetch-depth: 0
 
       - name: Send Mission Start Header
-        if: always()
+        if: github.event_name == 'workflow_dispatch' || env.updated == 'true'
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         run: |
@@ -84,21 +84,19 @@ jobs:
             EMOJI=$(python3 -c "print(''.join(chr(127397 + ord(c)) for c in '$CODE'))" 2>/dev/null || echo "🌐")
 
             # نام کشورها
+            # نام کامل کشورها بر اساس کد دو رقمی
             case $CODE in
-              TH) NAME="Thailand" ;; LC) NAME="Saint Lucia" ;; EE) NAME="Estonia" ;;
-              MG) NAME="Madagascar" ;; TZ) NAME="Tanzania" ;; BN) NAME="Brunei" ;;
-              CG) NAME="Congo" ;; PR) NAME="Puerto Rico" ;; TN) NAME="Tunisia" ;;
-              TR) NAME="Turkey" ;; BY) NAME="Belarus" ;; HM) NAME="Heard/McDonald Islands" ;;
-              AD) NAME="Andorra" ;; BM) NAME="Bermuda" ;; PT) NAME="Portugal" ;;
-              GE) NAME="Georgia" ;; BI) NAME="Burundi" ;; SM) NAME="San Marino" ;;
-              NU) NAME="Niue" ;; BB) NAME="Barbados" ;; RU) NAME="Russia" ;;
-              GW) NAME="Guinea-Bissau" ;; BD) NAME="Bangladesh" ;; GN) NAME="Guinea" ;;
-              CM) NAME="Cameroon" ;; LY) NAME="Libya" ;; MT) NAME="Malta" ;;
-              IT) NAME="Italy" ;; HK) NAME="Hong Kong" ;; YE) NAME="Yemen" ;;
-              FJ) NAME="Fiji" ;; MM) NAME="Myanmar" ;; YT) NAME="Mayotte" ;;
-              CR) NAME="Costa Rica" ;; BV) NAME="Bouvet Island" ;; BA) NAME="Bosnia" ;;
-              IR) NAME="Iran" ;; US) NAME="USA" ;; DE) NAME="Germany" ;;
-              *) NAME="$CODE" ;; # اگر در لیست نبود کد را نشان بده
+              AF) NAME="Afghanistan" ;; AL) NAME="Albania" ;; DZ) NAME="Algeria" ;; AS) NAME="American Samoa" ;; AD) NAME="Andorra" ;; AO) NAME="Angola" ;; AI) NAME="Anguilla" ;; AQ) NAME="Antarctica" ;; AG) NAME="Antigua/Barbuda" ;; AR) NAME="Argentina" ;; AM) NAME="Armenia" ;; AW) NAME="Aruba" ;; AU) NAME="Australia" ;; AT) NAME="Austria" ;; AZ) NAME="Azerbaijan" ;;
+              BS) NAME="Bahamas" ;; BH) NAME="Bahrain" ;; BD) NAME="Bangladesh" ;; BB) NAME="Barbados" ;; BY) NAME="Belarus" ;; BE) NAME="Belgium" ;; BZ) NAME="Belize" ;; BJ) NAME="Benin" ;; BM) NAME="Bermuda" ;; BT) NAME="Bhutan" ;; BO) NAME="Bolivia" ;; BA) NAME="Bosnia" ;; BW) NAME="Botswana" ;; BR) NAME="Brazil" ;; BN) NAME="Brunei" ;; BG) NAME="Bulgaria" ;; BF) NAME="Burkina Faso" ;; BI) NAME="Burundi" ;;
+              KH) NAME="Cambodia" ;; CM) NAME="Cameroon" ;; CA) NAME="Canada" ;; CV) NAME="Cape Verde" ;; KY) NAME="Cayman Islands" ;; CF) NAME="Central African Rep" ;; TD) NAME="Chad" ;; CL) NAME="Chile" ;; CN) NAME="China" ;; CX) NAME="Christmas Island" ;; CC) NAME="Cocos Islands" ;; CO) NAME="Colombia" ;; KM) NAME="Comoros" ;; CG) NAME="Congo" ;; CD) NAME="Congo (DRC)" ;; CK) NAME="Cook Islands" ;; CR) NAME="Costa Rica" ;; CI) NAME="Ivory Coast" ;; HR) NAME="Croatia" ;; CU) NAME="Cuba" ;; CY) NAME="Cyprus" ;; CZ) NAME="Czech Republic" ;;
+              DK) NAME="Denmark" ;; DJ) NAME="Djibouti" ;; DM) NAME="Dominica" ;; DO) NAME="Dominican Rep" ;; EC) NAME="Ecuador" ;; EG) NAME="Egypt" ;; SV) NAME="El Salvador" ;; GQ) NAME="Equatorial Guinea" ;; ER) NAME="Eritrea" ;; EE) NAME="Estonia" ;; ET) NAME="Ethiopia" ;; FK) NAME="Falkland Islands" ;; FO) NAME="Faroe Islands" ;; FJ) NAME="Fiji" ;; FI) NAME="Finland" ;; FR) NAME="France" ;; GF) NAME="French Guiana" ;; PF) NAME="French Polynesia" ;;
+              GA) NAME="Gabon" ;; GM) NAME="Gambia" ;; GE) NAME="Georgia" ;; DE) NAME="Germany" ;; GH) NAME="Ghana" ;; GI) NAME="Gibraltar" ;; GR) NAME="Greece" ;; GL) NAME="Greenland" ;; GD) NAME="Grenada" ;; GP) NAME="Guadeloupe" ;; GU) NAME="Guam" ;; GT) NAME="Guatemala" ;; GG) NAME="Guernsey" ;; GN) NAME="Guinea" ;; GW) NAME="Guinea-Bissau" ;; GY) NAME="Guyana" ;; HT) NAME="Haiti" ;; HN) NAME="Honduras" ;; HK) NAME="Hong Kong" ;; HU) NAME="Hungary" ;; IS) NAME="Iceland" ;; IN) NAME="India" ;; ID) NAME="Indonesia" ;; IR) NAME="Iran" ;; IQ) NAME="Iraq" ;; IE) NAME="Ireland" ;; IM) NAME="Isle of Man" ;; IL) NAME="Israel" ;; IT) NAME="Italy" ;;
+              JM) NAME="Jamaica" ;; JP) NAME="Japan" ;; JE) NAME="Jersey" ;; JO) NAME="Jordan" ;; KZ) NAME="Kazakhstan" ;; KE) NAME="Kenya" ;; KI) NAME="Kiribati" ;; KP) NAME="North Korea" ;; KR) NAME="South Korea" ;; KW) NAME="Kuwait" ;; KG) NAME="Kyrgyzstan" ;; LA) NAME="Laos" ;; LV) NAME="Latvia" ;; LB) NAME="Lebanon" ;; LS) NAME="Lesotho" ;; LR) NAME="Liberia" ;; LY) NAME="Libya" ;; LI) NAME="Liechtenstein" ;; LT) NAME="Lithuania" ;; LU) NAME="Luxembourg" ;;
+              MO) NAME="Macao" ;; MK) NAME="Macedonia" ;; MG) NAME="Madagascar" ;; MW) NAME="Malawi" ;; MY) NAME="Malaysia" ;; MV) NAME="Maldives" ;; ML) NAME="Mali" ;; MT) NAME="Malta" ;; MH) NAME="Marshall Islands" ;; MQ) NAME="Martinique" ;; MR) NAME="Mauritania" ;; MU) NAME="Mauritius" ;; YT) NAME="Mayotte" ;; MX) NAME="Mexico" ;; FM) NAME="Micronesia" ;; MD) NAME="Moldova" ;; MC) NAME="Monaco" ;; MN) NAME="Mongolia" ;; ME) NAME="Montenegro" ;; MS) NAME="Montserrat" ;; MA) NAME="Morocco" ;; MZ) NAME="Mozambique" ;; MM) NAME="Myanmar" ;;
+              NA) NAME="Namibia" ;; NR) NAME="Nauru" ;; NP) NAME="Nepal" ;; NL) NAME="Netherlands" ;; NC) NAME="New Caledonia" ;; NZ) NAME="New Zealand" ;; NI) NAME="Nicaragua" ;; NE) NAME="Niger" ;; NG) NAME="Nigeria" ;; NU) NAME="Niue" ;; NF) NAME="Norfolk Island" ;; MP) NAME="Northern Mariana" ;; NO) NAME="Norway" ;; OM) NAME="Oman" ;; PK) NAME="Pakistan" ;; PW) NAME="Palau" ;; PS) NAME="Palestine" ;; PA) NAME="Panama" ;; PG) NAME="Papua New Guinea" ;; PY) NAME="Paraguay" ;; PE) NAME="Peru" ;; PH) NAME="Philippines" ;; PL) NAME="Poland" ;; PT) NAME="Portugal" ;; PR) NAME="Puerto Rico" ;;
+              QA) NAME="Qatar" ;; RE) NAME="Reunion" ;; RO) NAME="Romania" ;; RU) NAME="Russia" ;; RW) NAME="Rwanda" ;; SH) NAME="Saint Helena" ;; KN) NAME="Saint Kitts/Nevis" ;; LC) NAME="Saint Lucia" ;; PM) NAME="Saint Pierre" ;; VC) NAME="Saint Vincent" ;; WS) NAME="Samoa" ;; SM) NAME="San Marino" ;; ST) NAME="Sao Tome" ;; SA) NAME="Saudi Arabia" ;; SN) NAME="Senegal" ;; RS) NAME="Serbia" ;; SC) NAME="Seychelles" ;; SL) NAME="Sierra Leone" ;; SG) NAME="Singapore" ;; SK) NAME="Slovakia" ;; SI) NAME="Slovenia" ;; SB) NAME="Solomon Islands" ;; SO) NAME="Somalia" ;; ZA) NAME="South Africa" ;; ES) NAME="Spain" ;; LK) NAME="Sri Lanka" ;; SD) NAME="Sudan" ;; SR) NAME="Suriname" ;; SZ) NAME="Swaziland" ;; SE) NAME="Sweden" ;; CH) NAME="Switzerland" ;; SY) NAME="Syria" ;;
+              TW) NAME="Taiwan" ;; TJ) NAME="Tajikistan" ;; TZ) NAME="Tanzania" ;; TH) NAME="Thailand" ;; TL) NAME="Timor-Leste" ;; TG) NAME="Togo" ;; TK) NAME="Tokelau" ;; TO) NAME="Tonga" ;; TT) NAME="Trinidad" ;; TN) NAME="Tunisia" ;; TR) NAME="Turkey" ;; TM) NAME="Turkmenistan" ;; TC) NAME="Turks/Caicos" ;; TV) NAME="Tuvalu" ;; UG) NAME="Uganda" ;; UA) NAME="Ukraine" ;; AE) NAME="UAE" ;; GB) NAME="United Kingdom" ;; US) NAME="USA" ;; UY) NAME="Uruguay" ;; UZ) NAME="Uzbekistan" ;; VU) NAME="Vanuatu" ;; VA) NAME="Vatican City" ;; VE) NAME="Venezuela" ;; VN) NAME="Vietnam" ;; VG) NAME="Virgin Islands (UK)" ;; VI) NAME="Virgin Islands (US)" ;; WF) NAME="Wallis/Futuna" ;; EH) NAME="Western Sahara" ;; YE) NAME="Yemen" ;; ZM) NAME="Zambia" ;; ZW) NAME="Zimbabwe" ;;
+              *) NAME="$CODE" ;;
             esac
 
             FULL_URL="${REPO_BASE_URL}/$FILE"
@@ -127,7 +125,7 @@ jobs:
           fi
 
       - name: Send Final Status & Analytics
-        if: always()
+        if: github.event_name == 'workflow_dispatch' || env.updated == 'true'
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         run: |
